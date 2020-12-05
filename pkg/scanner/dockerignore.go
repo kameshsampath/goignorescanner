@@ -60,25 +60,16 @@ func NewOrDefault(dir string) (DirectoryScanner, error) {
 
 	ignoreFile := filepath.Join(dir, DockerIgnoreFile)
 
-	_, err := os.Stat(ignoreFile)
+	p, err := scanAndBuildPatternsList(ignoreFile)
+
+	rawPatterns = append(rawPatterns, p...)
 
 	switch {
 	case os.IsNotExist(err):
-		// build patterns with defaults
-		for _, ip := range defaultPatterns {
-			x, err := tokenize(ip)
-			if err != nil {
-				return nil, err
-			} else {
-				IgnorePatterns = append(IgnorePatterns, *x)
-			}
-		}
 		return &defaultIgnorer{}, nil
 	case err != nil:
 		return nil, err
 	}
-
-	p, err := scanAndBuildPatternsList(ignoreFile)
 
 	for _, ip := range p {
 		x, err := tokenize(ip)
@@ -87,10 +78,6 @@ func NewOrDefault(dir string) (DirectoryScanner, error) {
 		} else {
 			IgnorePatterns = append(IgnorePatterns, *x)
 		}
-	}
-
-	if err != nil {
-		return nil, err
 	}
 
 	return &dockerIgnorer{}, nil
@@ -180,9 +167,7 @@ func scanAndBuildPatternsList(ignoreFile string) ([]string, error) {
 
 // Ignore implements DirectoryScanner, for  dockerignore cases
 func (id *dockerIgnorer) Scan() ([]string, error) {
-
 	err := godirwalk.Walk(directory, dirOpts)
-
 	return includes, err
 }
 

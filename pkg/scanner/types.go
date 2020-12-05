@@ -30,7 +30,6 @@ type IgnorePattern struct {
 	Paths        sets.String
 	RegexPattern *regexp.Regexp
 	Invert       bool
-	IsDir        bool
 }
 
 // DirectoryScanner  helps identifying if a BundleFile needs to be ignored
@@ -42,29 +41,68 @@ type DirectoryScanner interface {
 var (
 	_               DirectoryScanner = (*defaultIgnorer)(nil)
 	defaultPatterns                  = []string{".git", "vendor", "node_modules"}
+	rawPatterns     []string
+	excludedDirs    sets.String = sets.NewString()
 )
 
 var dirOpts = &godirwalk.Options{
 	Callback: func(osPathname string, dirEntry *godirwalk.Dirent) error {
 
-		// if osPathName is one among the default excludes skip walking into them
-		df := sets.NewString(defaultPatterns...)
-		if df.Has(filepath.Base(osPathname)) {
-			return godirwalk.SkipThis
-		}
+		// flag to keep track if file or directory is exluded
+		isExcluded := false
 
 		for _, igp := range IgnorePatterns {
 
 			re := igp.RegexPattern
 
-			regxMatches := re.FindAllStringSubmatch(osPathname, -1)
-			// since we ignore, just add to the includes if and only if we know its inverted pattern
-			if len(regxMatches) > 0 && igp.Invert {
-				for _, tuple := range regxMatches {
-					includes = append(includes, tuple[0])
-				}
+			// if pattern is not a inversion and the excluded directories has
+			// the current path parent the continue to check next pattern
+			if !igp.Invert && excludedDirs.Has(filepath.Dir(osPathname)) {
+				isExcluded = true
+				continue
 			}
 
+			regxMatches := re.FindAllStringSubmatch(osPathname, -1)
+
+			if len(regxMatches) > 0 {
+				isExcluded = true
+
+				// when a file or directory matches the pattern but has inversion
+				// then add the file to include list
+				if igp.Invert {
+					for _, tuple := range regxMatches {
+						rel, err := filepath.Rel(directory, tuple[0])
+						if err != nil {
+							return err
+						}
+						appendIfNotExist(rel)
+					}
+				}
+
+				// if the matched directory then add the directory to excludedDirs list
+				if dirEntry.IsDir() {
+					excludedDirs.Insert(osPathname)
+				}
+			}
+		}
+
+		// If there are no matches, then the walked directory or file need
+		// to be included as part of the include file list
+		if !isExcluded {
+
+			// dont append the rootdir as its always included
+			if directory == osPathname {
+				return nil
+			}
+
+			// build relative path to root directory
+			rel, err := filepath.Rel(directory, osPathname)
+
+			if err != nil {
+				return err
+			}
+
+			appendIfNotExist(rel)
 		}
 
 		return nil
@@ -79,4 +117,11 @@ type defaultIgnorer struct{}
 func (i *defaultIgnorer) Scan() ([]string, error) {
 	err := godirwalk.Walk(directory, dirOpts)
 	return includes, err
+}
+
+func appendIfNotExist(item string) {
+	incl := sets.NewString(includes...)
+	if !incl.Has(item) {
+		includes = append(includes, item)
+	}
 }

@@ -133,13 +133,59 @@ func TestEmptyDockerIgnoredPatterns(t *testing.T) {
 
 }
 
-func TestIgnoreables(t *testing.T) {
+func TestIgnorables(t *testing.T) {
 
 	eIncludes := sets.NewString([]string{
-		"/Users/kameshs/git/kameshsampath/goignorescanner/pkg/scanner/testdata/starignore/README.md",
-		"/Users/kameshs/git/kameshsampath/goignorescanner/pkg/scanner/testdata/starignore/target/foo-runner.jar",
-		"/Users/kameshs/git/kameshsampath/goignorescanner/pkg/scanner/testdata/starignore/target/lib/one.jar",
-		"/Users/kameshs/git/kameshsampath/goignorescanner/pkg/scanner/testdata/starignore/target/quarkus-app/one.txt",
+		".dockerignore",
+		"README.md",
+		"src",
+		"src/main",
+		"src/main/java",
+		"src/main/java/One.java",
+		"src/main/resources",
+		"src/main/resources/application.properties",
+		"tempABC",
+		"pom.xml",
+		"target/foo-runner.jar",
+	}...)
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal("os.Getwd() =", err)
+	}
+
+	dir := filepath.Join(wd, "testdata", "dir2")
+
+	ignoreScanner, err := NewOrDefault(dir)
+
+	if err != nil {
+		t.Error("isIgnorable() = ", err)
+	}
+
+	incls, err := ignoreScanner.Scan()
+
+	sIncludes := sets.NewString(incls...)
+
+	if err != nil {
+		t.Error("ignoreScanner.Scan() = ", err)
+	}
+
+	if got, want := len(incls), int(11); got != want {
+		t.Errorf("Patterns() = %d, wanted %d", got, want)
+	}
+
+	if !eIncludes.Equal(sIncludes) {
+		t.Errorf("Expeacted - Actual  : %s", sets.String.Difference(eIncludes, sIncludes))
+	}
+}
+
+func TestStarAndIgnoreables(t *testing.T) {
+
+	eIncludes := sets.NewString([]string{
+		"README.md",
+		"target/foo-runner.jar",
+		"target/lib/one.jar",
+		"target/quarkus-app/one.txt",
 	}...)
 
 	wd, err := os.Getwd()

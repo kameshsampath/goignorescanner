@@ -18,10 +18,10 @@ import (
 func tokenize(pattern string) (*IgnorePattern, error) {
 
 	// clean the pattern to be well formed Go path
-	filepath.Clean(pattern)
+	pattern = filepath.Clean(pattern)
 
 	// make sure the path starts with /
-	filepath.FromSlash(pattern)
+	pattern = filepath.FromSlash(pattern)
 
 	ignorePattern := &IgnorePattern{}
 	ignorePattern.Pattern = pattern
@@ -45,23 +45,8 @@ func tokenize(pattern string) (*IgnorePattern, error) {
 	}
 
 	ignorePattern.Paths = paths
-	ignorePattern.IsDir = isDir(pattern)
 
-	expr, err := asRegExp(pattern)
-
-	expr = strings.TrimPrefix(expr, "^")
-
-	// Since the patterns are relative to the root, compile regex with dir root
-	// prepended to it
-	expr = filepath.Join(directory, expr)
-
-	expr = "^" + expr
-
-	if err != nil {
-		return nil, err
-	}
-
-	re, err := regexp.Compile(expr)
+	re, err := asRegExp(pattern)
 
 	if err != nil {
 		return nil, err
@@ -73,7 +58,7 @@ func tokenize(pattern string) (*IgnorePattern, error) {
 }
 
 // asRegExp  builds a regular expression of the pattern
-func asRegExp(pattern string) (string, error) {
+func asRegExp(pattern string) (*regexp.Regexp, error) {
 	pathSep := string(os.PathSeparator)
 	escPath := pathSep
 
@@ -83,7 +68,7 @@ func asRegExp(pattern string) (string, error) {
 	}
 
 	//start
-	rexPat := "^"
+	rexPat := ""
 
 	var s scanner.Scanner
 	s.Init(strings.NewReader(pattern))
@@ -135,27 +120,15 @@ func asRegExp(pattern string) (string, error) {
 	//end
 	rexPat += "$"
 
-	//compile regular expression
-	//regx, err := regexp.Compile(rexPat)
-	//if err != nil {
-	//	return nil, err
-	//}
+	// Since the patterns are relative to the root, compile regex with dir root
+	// prepended to it
+	rexPat = "^" + directory + "/" + rexPat
 
-	return rexPat, nil
-}
-
-// checks is the pattern is directory or not
-// e.g
-// pattern !README.md  will return false
-// pattern target/     will return true
-// pattern lib/*   will return true
-// pattern target/one/two/one.txt  will return false
-func isDir(pattern string) bool {
-	re, err := regexp.Compile("/\\*?$")
+	re, err := regexp.Compile(rexPat)
 
 	if err != nil {
-		return false
+		return nil, err
 	}
 
-	return re.MatchString(pattern)
+	return re, nil
 }
