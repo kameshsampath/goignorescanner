@@ -24,8 +24,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-// IgnorePattern holds the ignoreable patterns
-type IgnorePattern struct {
+// IgnorePattern holds the ignorable patterns
+type FileIgnorePattern struct {
 	Pattern      string
 	Paths        sets.String
 	RegexPattern *regexp.Regexp
@@ -45,68 +45,77 @@ var (
 	excludedDirs    sets.String = sets.NewString()
 )
 
-var dirOpts = &godirwalk.Options{
-	Callback: func(osPathname string, dirEntry *godirwalk.Dirent) error {
+// scanDir scans the directory and checks whether the file or directory is ignorable
+func scanDir(osPathname string, dirEntry *godirwalk.Dirent) error {
 
-		// flag to keep track if file or directory is exluded
-		isExcluded := false
+	// if the dir is any of default patterns then skip scanning the dir
+	skipPaths := sets.NewString(defaultPatterns...)
+	if skipPaths.Has(dirEntry.Name()) {
+		return godirwalk.SkipThis
+	}
 
-		for _, igp := range IgnorePatterns {
+	// flag to keep track if file or directory is exluded
+	isExcluded := false
 
-			re := igp.RegexPattern
+	for _, igp := range ignorePatterns {
 
-			// if pattern is not a inversion and the excluded directories has
-			// the current path parent the continue to check next pattern
-			if !igp.Invert && excludedDirs.Has(filepath.Dir(osPathname)) {
-				isExcluded = true
-				continue
-			}
+		re := igp.RegexPattern
 
-			regxMatches := re.FindAllStringSubmatch(osPathname, -1)
+		// if pattern is not a inversion and the excluded directories has
+		// the current path parent the continue to check next pattern
+		if !igp.Invert && excludedDirs.Has(filepath.Dir(osPathname)) {
+			isExcluded = true
+			continue
+		}
 
-			if len(regxMatches) > 0 {
-				isExcluded = true
+		regxMatches := re.FindAllStringSubmatch(osPathname, -1)
 
-				// when a file or directory matches the pattern but has inversion
-				// then add the file to include list
-				if igp.Invert {
-					for _, tuple := range regxMatches {
-						rel, err := filepath.Rel(directory, tuple[0])
-						if err != nil {
-							return err
-						}
-						appendIfNotExist(rel)
+		if len(regxMatches) > 0 {
+			isExcluded = true
+
+			// when a file or directory matches the pattern but has inversion
+			// then add the file to include list
+			if igp.Invert {
+				for _, tuple := range regxMatches {
+					rel, err := filepath.Rel(directory, tuple[0])
+					if err != nil {
+						return err
 					}
-				}
-
-				// if the matched directory then add the directory to excludedDirs list
-				if dirEntry.IsDir() {
-					excludedDirs.Insert(osPathname)
+					appendIfNotExist(rel)
 				}
 			}
+
+			// if the matched directory then add the directory to excludedDirs list
+			if dirEntry.IsDir() {
+				excludedDirs.Insert(osPathname)
+			}
+		}
+	}
+
+	// If there are no matches, then the walked directory or file need
+	// to be included as part of the include file list
+	if !isExcluded {
+
+		// dont append the rootdir as its always included
+		if directory == osPathname {
+			return nil
 		}
 
-		// If there are no matches, then the walked directory or file need
-		// to be included as part of the include file list
-		if !isExcluded {
+		// build relative path to root directory
+		rel, err := filepath.Rel(directory, osPathname)
 
-			// dont append the rootdir as its always included
-			if directory == osPathname {
-				return nil
-			}
-
-			// build relative path to root directory
-			rel, err := filepath.Rel(directory, osPathname)
-
-			if err != nil {
-				return err
-			}
-
-			appendIfNotExist(rel)
+		if err != nil {
+			return err
 		}
 
-		return nil
-	},
+		appendIfNotExist(rel)
+	}
+
+	return nil
+}
+
+var dirOpts = &godirwalk.Options{
+	Callback: scanDir,
 }
 
 // defaultIgnorer is the default DirectoryScanner which is returned when no .dockerignore file is present

@@ -39,10 +39,9 @@ var (
 	_         DirectoryScanner = &defaultIgnorer{}
 	directory string
 	includes  []string
+	// patterns holds all the possible Ignorable patterns
+	ignorePatterns []FileIgnorePattern
 )
-
-// patterns holds all the possible Ignoreable patterns
-var IgnorePatterns []IgnorePattern
 
 // dockerIgnorer processes .dockerignore and use the extracted Patterns for ignoring files
 type dockerIgnorer struct {
@@ -54,7 +53,7 @@ func NewOrDefault(dir string) (DirectoryScanner, error) {
 
 	// every new gets clean includes
 	includes = make([]string, 0)
-	IgnorePatterns = make([]IgnorePattern, 0)
+	ignorePatterns = make([]FileIgnorePattern, 0)
 
 	directory = dir
 
@@ -72,12 +71,11 @@ func NewOrDefault(dir string) (DirectoryScanner, error) {
 	}
 
 	for _, ip := range p {
-		x, err := tokenize(ip)
+		x, err := toFileIgnorePattern(ip)
 		if err != nil {
 			return nil, err
-		} else {
-			IgnorePatterns = append(IgnorePatterns, *x)
 		}
+		ignorePatterns = append(ignorePatterns, *x)
 	}
 
 	return &dockerIgnorer{}, nil
@@ -118,7 +116,7 @@ func scanAndBuildPatternsList(ignoreFile string) ([]string, error) {
 		}
 
 		pattern := string(scannedBytes)
-		// removes the all unwanted spaces from the begining and end of the string
+		// removes the all unwanted spaces from the beginning and end of the string
 		// e.g. "\n\t\nfoo bar\n\t" will be trimmed to "foo bar"
 		pattern = strings.TrimSpace(pattern)
 		lineNo++
@@ -137,7 +135,7 @@ func scanAndBuildPatternsList(ignoreFile string) ([]string, error) {
 		}
 
 		// The Patterns can start with ! symbolizing inversion of the pattern
-		// When ! is seen remove the ! to clean up the pattern for Path seperators
+		// When ! is seen remove the ! to clean up the pattern for Path separators
 		// e.g. Patterns line !README.md
 		invert := strings.HasPrefix(pattern, invertPrefix)
 		if invert {
@@ -169,9 +167,4 @@ func scanAndBuildPatternsList(ignoreFile string) ([]string, error) {
 func (id *dockerIgnorer) Scan() ([]string, error) {
 	err := godirwalk.Walk(directory, dirOpts)
 	return includes, err
-}
-
-func (ig *IgnorePattern) matches() (bool, error) {
-
-	return false, nil
 }

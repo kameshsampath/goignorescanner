@@ -44,11 +44,11 @@ func TestDirectoryHasDockerIgnore(t *testing.T) {
 		t.Error("igScanner.Scan()= ", err)
 	}
 
-	if len(IgnorePatterns) == 0 {
+	if len(ignorePatterns) == 0 {
 		t.Errorf("The directory %s has '.dockerignore', but got it does not", dir)
 	}
 
-	if got, want := len(IgnorePatterns), int(9); got != want {
+	if got, want := len(ignorePatterns), int(9); got != want {
 		t.Errorf("Patterns() = %d, wanted %d", got, want)
 	}
 }
@@ -73,7 +73,7 @@ func TestDirectoryHasNoDockerIgnore(t *testing.T) {
 		t.Error("igScanner.Scan()= ", err)
 	}
 
-	if got, want := len(IgnorePatterns), int(3); got != want {
+	if got, want := len(ignorePatterns), int(3); got != want {
 		t.Errorf("Patterns() = %d, wanted %d", got, want)
 	}
 
@@ -101,7 +101,7 @@ func TestDockerIgnoredPatterns(t *testing.T) {
 		t.Error("igScanner.Scan()= ", err)
 	}
 
-	if got, want := len(IgnorePatterns), int(9); got != want {
+	if got, want := len(ignorePatterns), int(9); got != want {
 		t.Errorf("Patterns() = %d, wanted %d", got, want)
 	}
 
@@ -127,7 +127,7 @@ func TestEmptyDockerIgnoredPatterns(t *testing.T) {
 		t.Error("igScanner.Scan()= ", err)
 	}
 
-	if got, want := len(IgnorePatterns), int(3); got != want {
+	if got, want := len(ignorePatterns), int(3); got != want {
 		t.Errorf("Patterns() = %d, wanted %d", got, want)
 	}
 

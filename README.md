@@ -18,7 +18,7 @@ cd goignorescanner
 ./out/scanner -d pkg/scanner/testdata/starignore/
 ```
 
-A sample output of the scanner, that list files which are not ingnored by .dockerignore available as part of the folder `$PROJECT_HOME/pkg/scanner/testdata/starignore/`
+A sample output of the scanner, that list files which are not ignored by .dockerignore available as part of the folder `$PROJECT_HOME/pkg/scanner/testdata/starignore/`
 
 ```shell script
 pkg/scanner/testdata/starignore/README.md
