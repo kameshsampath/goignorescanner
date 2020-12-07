@@ -17,8 +17,11 @@ limitations under the License.
 package scanner
 
 import (
+	"log"
+	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/karrick/godirwalk"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -27,7 +30,7 @@ import (
 // IgnorePattern holds the ignorable patterns
 type FileIgnorePattern struct {
 	Pattern      string
-	Paths        sets.String
+	Paths        []string
 	RegexPattern *regexp.Regexp
 	Invert       bool
 }
@@ -48,14 +51,31 @@ var (
 // scanDir scans the directory and checks whether the file or directory is ignorable
 func scanDir(osPathname string, dirEntry *godirwalk.Dirent) error {
 
+	// convenience to flag the current path as not root directory
+	rootDir := osPathname == directory
+
+	// dont append the rootdir as its always included
+	if rootDir {
+		return nil
+	}
+
 	// if the dir is any of default patterns then skip scanning the dir
 	skipPaths := sets.NewString(defaultPatterns...)
 	if skipPaths.Has(dirEntry.Name()) {
 		return godirwalk.SkipThis
 	}
 
-	// flag to keep track if file or directory is exluded
+	// flag to keep track if file or directory is excluded
 	isExcluded := false
+
+	// flag to keep track transitive  directories
+	// Transitive directories are are the ones that are excluded
+	// but might have files under them with inversions
+	// e.g. with a ignore file like
+	// foo
+	// !foo/bar/one.txt
+	// In above case directory foo is transitive
+	isTransitive := false
 
 	for _, igp := range ignorePatterns {
 
@@ -84,22 +104,26 @@ func scanDir(osPathname string, dirEntry *godirwalk.Dirent) error {
 					appendIfNotExist(rel)
 				}
 			}
+		}
 
-			// if the matched directory then add the directory to excludedDirs list
-			if dirEntry.IsDir() {
-				excludedDirs.Insert(osPathname)
+		if dirEntry.IsDir() && !rootDir && igp.Invert && igp.Paths != nil {
+			pPath := strings.Join(igp.Paths, string(os.PathSeparator))
+			pPath = filepath.Join(directory, pPath)
+			if osPathname == pPath {
+				isTransitive = true
 			}
 		}
+
 	}
 
-	// If there are no matches, then the walked directory or file need
-	// to be included as part of the include file list
-	if !isExcluded {
-
-		// dont append the rootdir as its always included
-		if directory == osPathname {
-			return nil
+	if isExcluded {
+		// if the matched directory then add the directory to excludedDirs list
+		if dirEntry.IsDir() {
+			excludedDirs.Insert(osPathname)
 		}
+	} else {
+		// If there are no matches, then the walked directory or file need
+		// to be included as part of the include file list
 
 		// build relative path to root directory
 		rel, err := filepath.Rel(directory, osPathname)
@@ -109,6 +133,14 @@ func scanDir(osPathname string, dirEntry *godirwalk.Dirent) error {
 		}
 
 		appendIfNotExist(rel)
+	}
+
+	// the directory is not transitive and not root directory check is being done
+	// at last to avoid skipping directories that are not listed in the ignore file
+	// with "!" i.e. implicit includes
+	if dirEntry.IsDir() && !rootDir && isExcluded && !isTransitive {
+		log.Printf("Directory %s will be skipped from further iteration", osPathname)
+		return godirwalk.SkipThis
 	}
 
 	return nil

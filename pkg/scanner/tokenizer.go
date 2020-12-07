@@ -22,8 +22,6 @@ import (
 	"regexp"
 	"strings"
 	"text/scanner"
-
-	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 // toFileIgnorePattern is used to perform normalization on the pattern like
@@ -41,7 +39,6 @@ func toFileIgnorePattern(pattern string) (*FileIgnorePattern, error) {
 
 	ignorePattern := &FileIgnorePattern{}
 	ignorePattern.Pattern = pattern
-	paths := sets.NewString()
 
 	// check if it has inverts and remove them before creating paths
 	if strings.HasPrefix(pattern, "!") {
@@ -49,18 +46,12 @@ func toFileIgnorePattern(pattern string) (*FileIgnorePattern, error) {
 		ignorePattern.Invert = true
 	}
 
-	// remove the root slash and split the patterns as paths
-	if strings.HasPrefix(pattern, string(os.PathSeparator)) {
-		pattern = strings.TrimPrefix(pattern, string(os.PathSeparator))
-		t := strings.Split(pattern, string(os.PathSeparator))
-		paths.Insert(string(os.PathSeparator))
-		paths.Insert(t...)
-	} else {
-		t := strings.Split(pattern, string(os.PathSeparator))
-		paths.Insert(t...)
+	// add the parent directories if and only if the pattern has a /
+	// otherwise the path is deemed to be under root
+	if strings.Contains(pattern, string(os.PathSeparator)) {
+		ptokens := strings.Split(pattern, string(os.PathSeparator))
+		ignorePattern.Paths = ptokens[:len(ptokens)-1]
 	}
-
-	ignorePattern.Paths = paths
 
 	re, err := asRegExp(pattern)
 
